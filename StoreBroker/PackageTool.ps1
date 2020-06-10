@@ -8,7 +8,7 @@ $script:defaultIapConfigFileName = "IapConfigTemplate.json"
 $script:packageImageFolderName = "Assets"
 
 # New-SubmissionPackage supports these extensions.
-$script:supportedExtensions = ".appx", ".appxbundle", ".appxupload"
+$script:supportedExtensions = ".appx", ".appxbundle", ".appxupload", ".msix", ".msixbundle", ".msixupload"
 
 # String constants for New-SubmissionPackage parameters
 $script:s_ConfigPath = "ConfigPath"
@@ -2017,8 +2017,8 @@ function Read-AppxMetadata
     param(
         [Parameter(Mandatory)]
         [ValidateScript({
-            if (Test-Path -PathType Leaf -Include "*.appx" -Path $_) { $true }
-            else { throw "$_ cannot be found or is not an .appx." } })]
+            if (Test-Path -PathType Leaf -Include ("*.appx", "*.msix") -Path $_) { $true }
+            else { throw "$_ cannot be found or is not an .appx nor .msix." } })]
         [string] $AppxPath,
 
         [ref] $AppxInfo
@@ -2038,7 +2038,7 @@ function Read-AppxMetadata
         if ($null -eq $appxManifest)
         {
             Report-UnsupportedFile -Path $AppxPath
-            throw "`"$AppxPath`" is not a proper .appx. Could not find an AppxManifest.xml."
+            throw "`"$AppxPath`" is not a proper .appx nor .msix. Could not find an AppxManifest.xml."
         }
 
         Write-Log -Message "Opening `"$appxManifest`"." -Level Verbose
@@ -2146,8 +2146,8 @@ function Read-AppxUploadMetadata
     param(
         [Parameter(Mandatory)]
         [ValidateScript({
-            if (Test-Path -PathType Leaf -Include "*.appxupload" -Path $_) { $true }
-            else { throw "$_ cannot be found or is not an .appxupload." } })]
+            if (Test-Path -PathType Leaf -Include ("*.appxupload", "*.msixupload") -Path $_) { $true }
+            else { throw "$_ cannot be found or is not an .appxupload nor .msixupload." } })]
         [string] $AppxuploadPath,
 
         [ref] $AppxInfo
@@ -2160,14 +2160,14 @@ function Read-AppxUploadMetadata
         Write-Log -Message "Opening `"$AppxuploadPath`"." -Level Verbose
         $expandedContainerPath = Open-AppxContainer -AppxContainerPath $AppxPath
 
-        $appxFilePath = (Get-ChildItem -Recurse -Path $expandedContainerPath -Include "*.appx").FullName
+        $appxFilePath = (Get-ChildItem -Recurse -Path $expandedContainerPath -Include ("*.appx", "*.msix")).FullName
         if ($null -ne $appxFilePath)
         {
             if ($appxFilePath.Count -ne 1)
             {
                 Report-UnsupportedFile -Path $AppxuploadPath
 
-                $error = $throwFormat -f ".appx"
+                $error = $throwFormat -f ".appx or .msix"
                 Write-Log -Message $error -Level Error
                 throw $error
             }
@@ -2178,12 +2178,12 @@ function Read-AppxUploadMetadata
         }
 
         # Could not find an .appx inside. Maybe there is an .appxbundle.
-        $appxbundleFilePath = (Get-ChildItem -Recurse -Path $expandedContainerPath -Include "*.appxbundle").FullName
+        $appxbundleFilePath = (Get-ChildItem -Recurse -Path $expandedContainerPath -Include ("*.appxbundle", "*.msixbundle")).FullName
         if (($null -eq $appxbundleFilePath) -or ($appxbundleFilePath.Count -ne 1))
         {
             Report-UnsupportedFile -Path $AppxuploadPath
 
-            $error = $throwFormat -f ".appx or .appxbundle"
+            $error = $throwFormat -f ".appx, .appxbundle, .msix, or .msixbundle"
             Write-Log -Message $error -Level Error
             throw $error
         }
@@ -2241,8 +2241,8 @@ function Read-AppxBundleMetadata
     param(
         [Parameter(Mandatory)]
         [ValidateScript({
-            if (Test-Path -PathType Leaf -Include "*.appxbundle" -Path $_) { $true }
-            else { throw "$_ cannot be found or is not an .appxbundle." } })]
+            if (Test-Path -PathType Leaf -Include ("*.appxbundle", "*.msixbundle") -Path $_) { $true }
+            else { throw "$_ cannot be found or is not an .appxbundle or .msixbundle." } })]
         [string] $AppxbundlePath,
 
         [ref] $AppxInfo
@@ -2262,7 +2262,7 @@ function Read-AppxBundleMetadata
         if ($null -eq $bundleManifestPath)
         {
             Report-UnsupportedFile -Path $AppxbundlePath
-            throw "`"$AppxbundlePath`" is not a proper .appxbundle. Could not find an AppxBundleManifest.xml."
+            throw "`"$AppxbundlePath`" is not a proper .appxbundle nor .msixbundle. Could not find an AppxBundleManifest.xml."
         }
 
         Write-Log -Message "Opening `"$bundleManifestPath`"." -Level Verbose
@@ -2460,19 +2460,19 @@ function Read-ApplicationMetadata
     if ($PSCmdlet.ShouldProcess($AppxPath))
     {
         $metadata = $null
-        switch ([System.IO.Path]::GetExtension($AppxPath))
+        switch -Regex ([System.IO.Path]::GetExtension($AppxPath))
         {
-            ".appxbundle"
+            "^\.(appx|msix)bundle$"
             {
                 $metadata = Read-AppxBundleMetadata -AppxbundlePath $AppxPath -AppxInfo $AppxInfo
             }
 
-            ".appxupload"
+            "^\.(appx|msix)upload$"
             {
                 $metadata = Read-AppxUploadMetadata -AppxuploadPath $AppxPath -AppxInfo $AppxInfo
             }
 
-            ".appx"
+            "^\.(appx|msix)$"
             {
                 $metadata = Read-AppxMetadata -AppxPath $AppxPath -AppxInfo $AppxInfo
             }
